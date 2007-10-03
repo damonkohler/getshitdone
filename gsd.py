@@ -22,12 +22,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import os
-import re
-import BaseHTTPServer
+import BaseHTTPServer, os, re
 
 TEMPLATE_TAGS = re.compile(r'(<\?)(.*?)\?>', re.DOTALL)
-STATIC_DIR = 'static'
 
 
 class App(BaseHTTPServer.BaseHTTPRequestHandler):
@@ -50,8 +47,7 @@ class App(BaseHTTPServer.BaseHTTPRequestHandler):
   def Render(self, path, scope):
     """Render template with provided scope."""
     template = open(path).read()
-    parts = TEMPLATE_TAGS.split(template)
-    parts.reverse()
+    parts = list(reversed(TEMPLATE_TAGS.split(template)))
     locals().update(scope)
     while parts:
       part = parts.pop()
@@ -67,12 +63,10 @@ class App(BaseHTTPServer.BaseHTTPRequestHandler):
     self._SendHeaders(404)  # TODO(damonkohler): Add POST support.
 
   def do_GET(self):
-    if self.path.startswith('/' + STATIC_DIR):
-      self._SendStaticFile(self.path[1:])
-      return
-    path = self.path.split('?')[0]  # TODO(damonkohler): Parse GET params.
-    path = self.path.replace('/', '_')
-    path = path.replace('.', '_')
+    if self.path.startswith('/static'):
+      return self._SendStaticFile(self.path[1:])
+    # TODO(damonkohler): Add GET params support.
+    path = self.path.split('?')[0].replace('/', '_').replace('.', '_')
     try:
       handler = getattr(self, 'GET%s' % path)
     except AttributeError:
