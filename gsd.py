@@ -22,10 +22,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+import os
 import re
 import BaseHTTPServer
 
-TEMPLATE_TAGS = re.compile(r'(<\?)(.*?)\?>')
+TEMPLATE_TAGS = re.compile(r'(<\?)(.*?)\?>', re.DOTALL)
+STATIC_DIR = 'static'
 
 
 class App(BaseHTTPServer.BaseHTTPRequestHandler):
@@ -41,10 +43,15 @@ class App(BaseHTTPServer.BaseHTTPRequestHandler):
     self.send_header('Content-type', 'text/html')
     self.end_headers()
 
-  def Render(self, template_path, scope):
-    """Render template from path with provided scope."""
-    template = open(template_path).read()
+  def _SendStaticFile(self, path):
+    self._SendHeaders(200)
+    self.wfile.write(open(path.replace('/', os.sep)).read())
+
+  def Render(self, path, scope):
+    """Render template with provided scope."""
+    template = open(path).read()
     parts = TEMPLATE_TAGS.split(template)
+    parts.reverse()
     locals().update(scope)
     while parts:
       part = parts.pop()
@@ -57,9 +64,12 @@ class App(BaseHTTPServer.BaseHTTPRequestHandler):
     self._SendHeaders(200)
 
   def do_POST(self):
-    self._SendHeaders(404)
+    self._SendHeaders(404)  # TODO(damonkohler): Add POST support.
 
   def do_GET(self):
+    if self.path.startswith('/' + STATIC_DIR):
+      self._SendStaticFile(self.path[1:])
+      return
     path = self.path.split('?')[0]  # TODO(damonkohler): Parse GET params.
     path = self.path.replace('/', '_')
     path = path.replace('.', '_')
