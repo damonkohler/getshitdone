@@ -47,8 +47,7 @@ class App(BaseHTTPServer.BaseHTTPRequestHandler):
   def Render(self, template, scope=None, response=200):
     """Render template with provided scope."""
     sys.stdout = StringIO.StringIO()
-    parts = TEMPLATE_TAGS.split(template)
-    parts.reverse()
+    parts = list(reversed(TEMPLATE_TAGS.split(template)))
     locals().update(scope or {})
     while parts:
       part = parts.pop()
@@ -73,17 +72,14 @@ class App(BaseHTTPServer.BaseHTTPRequestHandler):
   def do_GET(self):
     if self.path.startswith('/static'):
       return self._SendStaticFile(self.path[1:])
-    request = self.path.split('?', 1)
-    path = request[0].replace('/', '_').replace('.', '_')
+    path, qs = (self.path.split('?', 1) + [''])[:2]
+    path = path.replace('/', '_').replace('.', '_')
     try:
       handler = getattr(self, 'GET%s' % path)
     except AttributeError:
       self.Render('404 Error', response=404)
     else:
-      qs = {}
-      if len(request) > 1:
-        qs = cgi.parse_qs(request[1])
-      handler(**qs)
+      handler(**cgi.parse_qs(qs))
 
   def Serve(self, host, port):
     try:
