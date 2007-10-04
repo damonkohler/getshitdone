@@ -22,58 +22,68 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import BaseHTTPServer, os, re
+import BaseHTTPServer, cgi, os, re, StringIO, sys
 
 TEMPLATE_TAGS = re.compile(r'(<\?)(.*?)\?>', re.DOTALL)
 
 
 class App(BaseHTTPServer.BaseHTTPRequestHandler):
 
-  """A self-serving web framework in under 50 lines of code."""
+  """A self-serving web framework."""
 
   def __call__(self, *args, **kwargs):
     BaseHTTPServer.BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
     return self
 
-  def _SendHeaders(self, response):
+  def _SendHeaders(self, response=200, key='Content-type', value='text/html'):
     self.send_response(response)
-    self.send_header('Content-type', 'text/html')
+    self.send_header(key, value)
     self.end_headers()
 
   def _SendStaticFile(self, path):
-    self._SendHeaders(200)
+    self._SendHeaders()
     self.wfile.write(open(path.replace('/', os.sep)).read())
 
-  def Render(self, path, scope):
+  def Render(self, template, scope=None, response=200):
     """Render template with provided scope."""
-    template = open(path).read()
-    parts = list(reversed(TEMPLATE_TAGS.split(template)))
-    locals().update(scope)
+    sys.stdout = StringIO.StringIO()
+    parts = TEMPLATE_TAGS.split(template)
+    parts.reverse()
+    locals().update(scope or {})
     while parts:
       part = parts.pop()
       if part == '<?':
         exec parts.pop()
       else:
-        self.wfile.write(part)
+        print part
+    self._SendHeaders(response)
+    self.wfile.write(sys.stdout.getvalue())
+    sys.stdout = sys.__stdout__
+
+  def Redirect(self, path):
+    self._SendHeaders(303, 'Location', path)
 
   def do_HEAD(self):
-    self._SendHeaders(200)
+    self._SendHeaders()
 
   def do_POST(self):
-    self._SendHeaders(404)  # TODO(damonkohler): Add POST support.
+    # TODO(damonkohler): Add POST support.
+    self.Render('404 Error', response=404)
 
   def do_GET(self):
     if self.path.startswith('/static'):
       return self._SendStaticFile(self.path[1:])
-    # TODO(damonkohler): Add GET params support.
-    path = self.path.split('?')[0].replace('/', '_').replace('.', '_')
+    request = self.path.split('?', 1)
+    path = request[0].replace('/', '_').replace('.', '_')
     try:
       handler = getattr(self, 'GET%s' % path)
     except AttributeError:
-      self._SendHeaders(404)
+      self.Render('404 Error', response=404)
     else:
-      self._SendHeaders(200)
-      handler()
+      qs = {}
+      if len(request) > 1:
+        qs = cgi.parse_qs(request[1])
+      handler(**qs)
 
   def Serve(self, host, port):
     try:
