@@ -22,14 +22,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import BaseHTTPServer, cgi, os, re, StringIO, sys
+import BaseHTTPServer, cgi, os, re, SocketServer, StringIO, sys
 
 TEMPLATE_TAGS = re.compile(r'(<\?)(.*?)\?>', re.DOTALL)
+
+
+class Server(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
+  pass
 
 
 class App(BaseHTTPServer.BaseHTTPRequestHandler):
 
   """A self-serving web framework."""
+
+  def __init__(self):
+    pass
 
   def __call__(self, *args, **kwargs):
     BaseHTTPServer.BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
@@ -83,6 +90,6 @@ class App(BaseHTTPServer.BaseHTTPRequestHandler):
 
   def Serve(self, host, port):
     try:
-      BaseHTTPServer.HTTPServer((host, port), self).serve_forever()
+      Server((host, port), self).serve_forever()
     except KeyboardInterrupt:
       pass
