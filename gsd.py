@@ -22,18 +22,20 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import BaseHTTPServer, cgi, os, re, StringIO, sys
+import BaseHTTPServer, cgi, os, re, SocketServer, StringIO, sys
 
 TEMPLATE_TAGS = re.compile(r'(<\?)(.*?)\?>', re.DOTALL)
 
 
-class App(BaseHTTPServer.BaseHTTPRequestHandler):
+class Server(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
+  pass
 
-  """A self-serving web framework."""
 
-  def __call__(self, *args, **kwargs):
+class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+
+  def __init__(self, app, *args, **kwargs):
+    self.app = app
     BaseHTTPServer.BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
-    return self
 
   def _SendHeaders(self, response=200, key='Content-type', value='text/html'):
     self.send_response(response)
@@ -43,6 +45,26 @@ class App(BaseHTTPServer.BaseHTTPRequestHandler):
   def _SendStaticFile(self, path):
     self._SendHeaders()
     self.wfile.write(open(path.replace('/', os.sep)).read())
+
+  def do_HEAD(self):
+    self._SendHeaders()
+
+  def do_POST(self):
+    # TODO(damonkohler): Add POST support.
+    self.Render('404 Error', response=404)
+
+  def do_GET(self):
+    if self.path.startswith('/static'):
+      return self._SendStaticFile(self.path[1:])
+    path, qs = (self.path.split('?', 1) + [''])[:2]
+    path = path.replace('/', '_').replace('.', '_')
+    try:
+      get = getattr(self.app, 'GET%s' % path)
+    except AttributeError, e:
+      print e
+      self.Render('404 Error', response=404)
+    else:
+      get(self, **cgi.parse_qs(qs))
 
   def Render(self, template, scope=None, response=200):
     """Render template with provided scope."""
@@ -62,27 +84,24 @@ class App(BaseHTTPServer.BaseHTTPRequestHandler):
   def Redirect(self, path):
     self._SendHeaders(303, 'Location', path)
 
-  def do_HEAD(self):
-    self._SendHeaders()
 
-  def do_POST(self):
-    # TODO(damonkohler): Add POST support.
-    self.Render('404 Error', response=404)
+class App(object):
 
-  def do_GET(self):
-    if self.path.startswith('/static'):
-      return self._SendStaticFile(self.path[1:])
-    path, qs = (self.path.split('?', 1) + [''])[:2]
-    path = path.replace('/', '_').replace('.', '_')
-    try:
-      handler = getattr(self, 'GET%s' % path)
-    except AttributeError:
-      self.Render('404 Error', response=404)
-    else:
-      handler(**cgi.parse_qs(qs))
+  """A self-serving web framework."""
+
+  def Handler(self, *args, **kwargs):
+    return RequestHandler(self, *args, **kwargs)
 
   def Serve(self, host, port):
     try:
-      BaseHTTPServer.HTTPServer((host, port), self).serve_forever()
+      Server((host, port), self.Handler).serve_forever()
     except KeyboardInterrupt:
       pass
+
+  def Main(self):
+    if not len(sys.argv) > 2:
+      print '%s host port' % __file__
+      sys.exit(1)
+    host, port = sys.argv[1], int(sys.argv[2])
+    print 'http://%s:%d/' % (host, port)
+    self.Serve(host, port)
