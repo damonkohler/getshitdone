@@ -22,20 +22,22 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import BaseHTTPServer, cgi, os, re, SocketServer, StringIO, sys
+import BaseHTTPServer, cgi, os, re, SocketServer, StringIO, sys, traceback, socket
 
 TEMPLATE_TAGS = re.compile(r'(<\?)(.*?)\?>', re.DOTALL)
-
-
-class Server(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
-  pass
 
 
 class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
   def __init__(self, app, *args, **kwargs):
     self.app = app
-    BaseHTTPServer.BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
+    try:
+      BaseHTTPServer.BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
+    except socket.error, e:
+      pass
+
+  def log_request(self, code='-', size='-'):
+    pass
 
   def _SendHeaders(self, response=200, key='Content-type', value='text/html'):
     self.send_response(response)
@@ -44,7 +46,7 @@ class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
   def _SendStaticFile(self, path):
     self._SendHeaders()
-    self.wfile.write(open(path.replace('/', os.sep)).read())
+    self.wfile.write(open(path.replace('/', os.sep), 'rb').read())
 
   def do_HEAD(self):
     self._SendHeaders()
@@ -64,11 +66,15 @@ class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
       print e
       self.Render('404 Error', response=404)
     else:
-      get(self, **cgi.parse_qs(qs))
+      try:
+        get(self, **cgi.parse_qs(qs))
+      except:
+        traceback.print_exc()
+        sys.stderr.flush()
 
   def Render(self, template, scope=None, response=200):
     """Render template with provided scope."""
-    sys.stdout = StringIO.StringIO()
+    out = StringIO.StringIO()
     parts = list(reversed(TEMPLATE_TAGS.split(template)))
     locals().update(scope or {})
     while parts:
@@ -76,10 +82,12 @@ class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
       if part == '<?':
         exec parts.pop()
       else:
-        print part
+        out.write(part)
     self._SendHeaders(response)
-    self.wfile.write(sys.stdout.getvalue())
-    sys.stdout = sys.__stdout__
+    try:
+      self.wfile.write(out.getvalue())
+    except socket.error, e:
+      pass
 
   def Redirect(self, path):
     self._SendHeaders(303, 'Location', path)
@@ -94,7 +102,7 @@ class App(object):
 
   def Serve(self, host, port):
     try:
-      Server((host, port), self.Handler).serve_forever()
+      BaseHTTPServer.HTTPServer((host, port), self.Handler).serve_forever()
     except KeyboardInterrupt:
       pass
 
