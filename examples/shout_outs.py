@@ -37,8 +37,8 @@ TEMPLATE = """
 <input type="submit" value="Shout!">
 </form>
 <?
-for shout in self.shout_outs:
-  print shout, '<br>'
+for shout in shout_outs:
+  out.write('%s<br>' % shout)
 ?>
 </body>
 </html>
@@ -52,16 +52,16 @@ class ShoutOuts(gsd.App):
   def __init__(self):
     self.shout_outs = []
 
-  def GET_(self, shout=None):
+  def GET_(self, handler, shout=None):
     """Display shout outs and form to add new ones."""
     if shout is not None:
       self.shout_outs.append(shout[0])
-    self.Render(TEMPLATE, locals())
+    handler.Render(TEMPLATE, {'shout_outs': self.shout_outs})
 
-  def GET_reset(self):
+  def GET_reset(self, handler):
     """Reset the list of shoutouts."""
     self.shout_outs = []
-    self.Redirect('/')
+    handler.Redirect('/')
 
 
 if __name__ == '__main__':

@@ -31,13 +31,15 @@ class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
   def __init__(self, app, *args, **kwargs):
     self.app = app
+    self.logging_enabled = True
     try:
       BaseHTTPServer.BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
     except socket.error, e:
       pass
 
-  def log_request(self, code='-', size='-'):
-    pass
+  def log_request(self, *args, **kwargs):
+    if self.logging_enabled:
+      BaseHTTPServer.BaseHTTPRequestHandler.log_request(self, *args, **kwargs)
 
   def _SendHeaders(self, response=200, key='Content-type', value='text/html'):
     self.send_response(response)
@@ -63,7 +65,7 @@ class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     try:
       get = getattr(self.app, 'GET%s' % path)
     except AttributeError, e:
-      print e
+      print '404 Error: %s' % e
       self.Render('404 Error', response=404)
     else:
       try:
